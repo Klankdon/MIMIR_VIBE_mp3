@@ -1,0 +1,35 @@
+name: Build .NET App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x' # Update to your target SDK version (e.g., 6.0, 8.0, 9.0)
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build Solution
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Publish Executable
+      run: dotnet publish --configuration Release --self-contained true -r win-x64 -o ./publish --no-restore
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: SimpleMp3Player-Exe
+        path: ./publish/
