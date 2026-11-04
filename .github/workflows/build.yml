@@ -20,13 +20,13 @@ jobs:
         dotnet-version: '8.0.x' # Update to your target SDK version (e.g., 6.0, 8.0, 9.0)
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore SimpleMp3Player/SimpleMp3Player.csproj
 
     - name: Build Solution
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build SimpleMp3Player/SimpleMp3Player.csproj --configuration Release --no-restore
 
     - name: Publish Executable
-      run: dotnet publish --configuration Release --self-contained true -r win-x64 -o ./publish --no-restore
+      run: dotnet publish SimpleMp3Player/SimpleMp3Player.csproj --configuration Release --self-contained true -r win-x64 -o ./publish --no-restore
 
     - name: Upload Artifacts
       uses: actions/upload-artifact@v4
