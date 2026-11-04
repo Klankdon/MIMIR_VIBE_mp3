@@ -1,23 +1,9 @@
-# Create a new .NET 6 console app
-dotnet new console -n SimpleMp3Player -force
-
-# Change into the folder
-cd SimpleMp3Player
-
-# Add the necessary NuGet packages
-dotnet add package NAudio
-dotnet add package System.Drawing.Common   # needed for GDI+ drawing / bitmaps
-
-
-// --- NEXT BLOCK ---
-
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,9 +13,6 @@ using NAudio.Wave;
 
 namespace SimpleMp3Player
 {
-    // -------------------------------------------------
-    // 1. Config / Skin model
-    // -------------------------------------------------
     public class SkinConfig
     {
         public int WindowWidth { get; set; } = 600;
@@ -38,14 +21,11 @@ namespace SimpleMp3Player
         public Color ForeColor { get; set; } = Color.White;
         public int BarCount { get; set; } = 64;
         public float BarHeightScale { get; set; } = 1.0f;
-        public string WallpaperPath { get; set; } = string.Empty; // relative to "wallpaper" subfolder
-        public string WallpaperStretch { get; set; } = "tile"; // "tile" or "stretch"
+        public string WallpaperPath { get; set; } = string.Empty;
+        public string WallpaperStretch { get; set; } = "tile";
         public float WallpaperOpacity { get; set; } = 1.0f;
     }
 
-    // -------------------------------------------------
-    // 2. Simple audio player wrapper (NAudio)
-    // -------------------------------------------------
     public class SimpleAudioPlayer : IDisposable
     {
         private readonly WaveFileReader _reader;
@@ -84,7 +64,6 @@ namespace SimpleMp3Player
             _reader.CurrentTime = TimeSpan.FromSeconds(seconds);
         }
 
-        // Feed the audio into the provider (required for streaming / effects later)
         public void Feed()
         {
             const int blockSize = 1024;
@@ -92,7 +71,6 @@ namespace SimpleMp3Player
             int read;
             while ((read = _reader.Read(buffer, 0, buffer.Length)) > 0)
                 _provider.AddSamples(buffer, 0, read);
-            // Signal end‑of‑stream to NAudio (flush)
             _provider.Flush();
         }
 
@@ -103,25 +81,19 @@ namespace SimpleMp3Player
         }
     }
 
-    // -------------------------------------------------
-    // 3. Audio visualizer (FFT based bar display)
-    // -------------------------------------------------
     public class AudioVisualizer
     {
-        public float[] Bars { get; } = new float[64];
+        public float[] Bars { get; }
         private readonly float[] _fftBuffer;
-        private int _bufferPos;
 
         public AudioVisualizer(int barCount = 64)
         {
             Bars = new float[barCount];
-            _fftBuffer = new float[barCount * 2]; // simplistic real‑FFT placeholder
+            _fftBuffer = new float[barCount * 2];
         }
 
-        // Very tiny “FFT” – just copy magnitude of the waveform for demo
         public void Update(float[] samples)
         {
-            // Simple RMS per 64 bins
             int binSize = samples.Length / Bars.Length;
             for (int i = 0; i < Bars.Length; i++)
             {
@@ -132,22 +104,19 @@ namespace SimpleMp3Player
                     float v = samples[start + j];
                     sum += v * v;
                 }
-                Bars[i] = (float)Math.Sqrt(sum / binSize) * 2f; // scale to fit window
+                Bars[i] = (float)Math.Sqrt(sum / binSize) * 2f;
             }
         }
     }
 
-    // -------------------------------------------------
-    // 4. Main UI – WinForms window with skin support
-    // -------------------------------------------------
     public class Mp3PlayerForm : Form
     {
         private readonly SkinConfig _skin;
         private readonly List<string> _playlist = new();
         private int _currentTrackIndex = -1;
         private SimpleAudioPlayer _player;
-        private readonly AudioVisualizer _visualizer = new();
-        private readonly Timer _timer = new() { Interval = 250 }; // UI refresh
+        private readonly AudioVisualizer _visualizer;
+        private readonly System.Windows.Forms.Timer _timer = new() { Interval = 250 };
         private readonly TextBox _txtPlaylist;
         private readonly Button _btnPlay;
         private readonly Button _btnPause;
@@ -159,13 +128,10 @@ namespace SimpleMp3Player
 
         public Mp3PlayerForm()
         {
-            // Load skin from "skin.json" (default if missing)
             _skin = LoadSkin();
-
-            // Apply wallpaper
+            _visualizer = new AudioVisualizer(_skin.BarCount);
             ApplyWallpaper();
 
-            // UI setup
             Text = "Simple MP3 Player";
             Size = new Size(_skin.WindowWidth, _skin.WindowHeight);
             FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -175,7 +141,6 @@ namespace SimpleMp3Player
             ForeColor = _skin.ForeColor;
             Font = new Font("Segoe UI", 9F, FontStyle.Regular);
 
-            // ---- Controls ------------------------------------------------
             var pnlTop = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
@@ -206,15 +171,14 @@ namespace SimpleMp3Player
                 Text = "No track loaded"
             };
 
-            // Visualizer picture box (bottom)
             _pbVisualizer = new PictureBox
             {
                 Dock = DockStyle.Fill,
                 SizeMode = PictureBoxSizeMode.StretchImage,
                 BackColor = Color.Black
             };
+            _pbVisualizer.Paint += _pbVisualizer_Paint;
 
-            // Playlist list (right side – optional split)
             _txtPlaylist = new TextBox
             {
                 Dock = DockStyle.Right,
@@ -226,27 +190,23 @@ namespace SimpleMp3Player
                 ForeColor = ForeColor
             };
 
-            // Layout: visualizer + playlist (split container)
             var split = new SplitContainer
             {
                 Dock = DockStyle.Fill,
                 Orientation = Orientation.Horizontal,
-                Panel1.Controls = { _pbVisualizer },
-                Panel2.Controls = { _txtPlaylist },
                 SplitterDistance = (int)(Height * 0.70f)
             };
+            split.Panel1.Controls.Add(_pbVisualizer);
+            split.Panel2.Controls.Add(_txtPlaylist);
 
-            // Assemble form
             Controls.Add(split);
-            Controls.Add(pnlTop, 0, 0);
-            Controls.Add(_pbProgress, 0, 1);
-            Controls.Add(_lblInfo, 0, 2);
+            Controls.Add(_lblInfo);
+            Controls.Add(_pbProgress);
+            Controls.Add(pnlTop);
 
-            // Timer for UI updates
             _timer.Tick += Timer_Tick;
             _timer.Start();
 
-            // Load a sample playlist if any mp3 files exist in the working dir
             LoadDefaultPlaylist();
         }
 
@@ -260,12 +220,8 @@ namespace SimpleMp3Player
                     var json = File.ReadAllText(skinPath);
                     return JsonSerializer.Deserialize<SkinConfig>(json) ?? new SkinConfig();
                 }
-                catch
-                {
-                    // fallback to defaults on parse error
-                }
+                catch { }
             }
-            // Write a minimal default skin (helps first‑run users)
             var defaultSkin = new SkinConfig();
             File.WriteAllText(skinPath, JsonSerializer.Serialize(defaultSkin, new JsonSerializerOptions { WriteIndented = true }));
             return defaultSkin;
@@ -279,13 +235,8 @@ namespace SimpleMp3Player
                 try
                 {
                     _wallpaper = new Bitmap(wallpaperFile);
-                    // Apply opacity via a tinted overlay (quick & dirty)
-                    using (var gfx = CreateGraphics())
-                    {
-                        // We will draw the wallpaper in the Paint event later.
-                    }
                 }
-                catch { /* ignore bad images */ }
+                catch { }
             }
         }
 
@@ -295,6 +246,7 @@ namespace SimpleMp3Player
             foreach (var f in files)
                 _playlist.Add(Path.GetFileName(f));
             RefreshPlaylistDisplay();
+            if (_playlist.Count > 0) _currentTrackIndex = 0;
         }
 
         private void RefreshPlaylistDisplay()
@@ -304,9 +256,14 @@ namespace SimpleMp3Player
                 _txtPlaylist.AppendText($"{i + 1}. {_playlist[i]}{Environment.NewLine}");
         }
 
-        // -------------------------------------------------
-        // Event handlers
-        // -------------------------------------------------
+        private void UpdateInfo()
+        {
+            if (_player == null)
+            {
+                _lblInfo.Text = "No track loaded";
+            }
+        }
+
         private void BtnPlay_Click(object sender, EventArgs e)
         {
             if (_currentTrackIndex < 0 || _currentTrackIndex >= _playlist.Count) return;
@@ -324,7 +281,11 @@ namespace SimpleMp3Player
 
         private void BtnPause_Click(object sender, EventArgs e)
         {
-            _player?.Pause();
+            if (_player != null)
+            {
+                if (_player.IsPlaying) _player.Pause();
+                else if (_player.IsPaused) _player.Play();
+            }
             UpdateInfo();
         }
 
@@ -336,6 +297,7 @@ namespace SimpleMp3Player
 
         private void NextTrack()
         {
+            if (_playlist.Count == 0) return;
             _player?.Dispose();
             _player = null;
             _currentTrackIndex = (_currentTrackIndex + 1) % _playlist.Count;
@@ -346,49 +308,37 @@ namespace SimpleMp3Player
         {
             if (_player == null) return;
 
-            // Update progress bar
             double pos = _player.CurrentPosition;
             double dur = _player.TotalDuration;
-            _pbProgress.Value = (int)((pos / dur) * 100);
-            _lblInfo.Text = $"_player.IsPlaying ? \"Playing\" : \"Paused\" | {TimeSpan.FromSeconds(pos):hh\\:mm\\:ss} / {TimeSpan.FromSeconds(dur):hh\\:mm\\:ss}";
-
-            // Generate a dummy sample array for visualizer (just use raw audio data for now)
-            // For simplicity we just show static bars; you can swap this with a real FFT.
-            _visualizer.Update(new float[_skin.BarCount]);
-            _pbVisualizer.Invalidate(); // force repaint
-        }
-
-        private void Mp3PlayerForm_Paint(object sender, PaintEventArgs e)
-        {
-            // Draw wallpaper as background (simple tile or stretch)
-            if (_wallpaper != null)
+            if (dur > 0)
             {
-                using var attr = new Drawing.Graphics((Graphics)e.Graphics);
-                if (_skin.WallpaperStretch == "stretch")
-                {
-                    e.Graphics.DrawImage(_wallpaper, ClientRectangle);
-                }
-                else
-                {
-                    // tile
-                    int w = _wallpaper.Width, h = _wallpaper.Height;
-                    for (int x = 0; x < ClientRectangle.Width; x += w)
-                        for (int y = 0; y < ClientRectangle.Height; y += h)
-                            e.Graphics.DrawImage(_wallpaper, x, y, w, h);
-                }
+                _pbProgress.Value = Math.Clamp((int)((pos / dur) * 100), 0, 100);
             }
-        }
+            string status = _player.IsPlaying ? "Playing" : "Paused";
+            _lblInfo.Text = $"{status} | {TimeSpan.FromSeconds(pos):hh\\:mm\\:ss} / {TimeSpan.FromSeconds(dur):hh\\:mm\\:ss}";
 
-        private void Mp3PlayerForm_Resize(object sender, EventArgs e)
-        {
-            // Re‑draw visualizer when window resizes
+            _visualizer.Update(new float[_skin.BarCount]);
             _pbVisualizer.Invalidate();
         }
 
-        // Simple visualizer draw
         private void _pbVisualizer_Paint(object sender, PaintEventArgs e)
         {
             var rect = _pbVisualizer.ClientRectangle;
+            if (_wallpaper != null)
+            {
+                if (_skin.WallpaperStretch == "stretch")
+                {
+                    e.Graphics.DrawImage(_wallpaper, rect);
+                }
+                else
+                {
+                    int w = _wallpaper.Width, h = _wallpaper.Height;
+                    for (int x = 0; x < rect.Width; x += w)
+                        for (int y = 0; y < rect.Height; y += h)
+                            e.Graphics.DrawImage(_wallpaper, x, y, w, h);
+                }
+            }
+
             float barWidth = rect.Width / (float)_skin.BarCount;
             for (int i = 0; i < _skin.BarCount; i++)
             {
@@ -397,7 +347,7 @@ namespace SimpleMp3Player
                 int barHeight = (int)Math.Max(h, 2);
                 int y = rect.Bottom - barHeight;
                 using var brush = new SolidBrush(Color.Cyan);
-                e.Graphics.FillRectangle(brush, x, y, (int)barWidth - 1, barHeight);
+                e.Graphics.FillRectangle(brush, x, y, Math.Max((int)barWidth - 1, 1), barHeight);
             }
         }
 
@@ -408,9 +358,6 @@ namespace SimpleMp3Player
         }
     }
 
-    // -------------------------------------------------
-    // 5. Entry point
-    // -------------------------------------------------
     static class Program
     {
         [STAThread]
