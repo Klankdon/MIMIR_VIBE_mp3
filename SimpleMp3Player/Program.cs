@@ -422,28 +422,3 @@ namespace SimpleMp3Player
         }
     }
 }
-
-
-// --- NEXT BLOCK ---
-
-# Inside the repo folder (where Program.cs lives)
-dotnet build
-dotnet run --configuration Release   # starts the UI
-
-# To produce a self‑contained exe (Windows, x64)
-dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
-
-
-// --- NEXT BLOCK ---
-
-{
-  "WindowWidth": 720,
-  "WindowHeight": 520,
-  "BackColor": "#1E1E1E",
-  "ForeColor": "#F0F0F0",
-  "BarCount": 128,
-  "BarHeightScale": 1.5,
-  "WallpaperPath": "mybg.png",
-  "WallpaperStretch": "stretch",
-  "WallpaperOpacity": 0.85
-}
