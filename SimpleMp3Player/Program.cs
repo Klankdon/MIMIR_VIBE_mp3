@@ -71,7 +71,7 @@ namespace SimpleMp3Player
             int read;
             while ((read = _reader.Read(buffer, 0, buffer.Length)) > 0)
                 _provider.AddSamples(buffer, 0, read);
-            _provider.Flush();
+            // Remove or omit _provider.Flush(); here
         }
 
         public void Dispose()
